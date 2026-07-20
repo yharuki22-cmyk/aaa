@@ -32,7 +32,6 @@ LAYERS = [
     ("13境界線", 6, "PHANTOM"),
     ("14図枠", 7, "CONTINUOUS"),
     ("16外構", 4, "CONTINUOUS"),
-    ("0", 7, "CONTINUOUS"),
 ]
 
 X_NAMES = ["い", "ろ", "は", "に", "ほ", "へ", "と", "ち", "り"]
@@ -47,10 +46,9 @@ TREES = [
 def new_doc():
     doc = ezdxf.new("R2010", setup=True)
     doc.units = units.MM
-    doc.styles.add("JP", font="ipag.ttf")
+    doc.styles.add("JP", font="ipag.ttf")     # 室名など日本語用
+    doc.styles.add("DIM", font="arial.ttf")   # 寸法値: 半角英数フォント
     for name, color, ltype in LAYERS:
-        if name == "0":
-            continue
         doc.layers.add(name, color=color, linetype=ltype)
 
     style = doc.dimstyles.duplicate_entry("EZDXF", "JIS100")
@@ -59,7 +57,7 @@ def new_doc():
     style.dxf.dimexo = 150
     style.dxf.dimexe = 150
     style.dxf.dimgap = 60
-    style.dxf.dimtxsty = "JP"
+    style.dxf.dimtxsty = "DIM"
     style.dxf.dimdec = 0
     doc.header["$LTSCALE"] = 30    # 一点鎖線などの線種ピッチをmm図面向けに
     return doc

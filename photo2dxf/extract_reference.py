@@ -116,6 +116,12 @@ def main(src, dst="reference_geometry.json"):
     chains["13境界線"].extend(moved)
     print(f"境界矩形 {len(moved)} 辺を 12切断線 → 13境界線 に移動")
 
+    # --- レイヤ0に置かれていた浴槽を 05設備機器 へ移す ---
+    stray = chains.pop("0", [])
+    if stray:
+        chains.setdefault("05設備機器", []).extend(stray)
+        print(f"レイヤ0の {len(stray)} チェーン(浴槽)を 05設備機器 に移動")
+
     def tr(p):
         return [round((p[0] - u0) * scale, 1), round((p[1] - v0) * scale, 1)]
 
