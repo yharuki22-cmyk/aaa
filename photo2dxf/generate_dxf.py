@@ -53,7 +53,9 @@ def new_doc():
 
     style = doc.dimstyles.duplicate_entry("EZDXF", "JIS100")
     style.dxf.dimtxt = DIM_TEXT_H
-    style.dxf.dimtsz = 120         # 矢印ではなくJIS風の斜めティック
+    style.dxf.dimtsz = 0
+    style.dxf.dimblk = "DOT"       # 端末は黒丸
+    style.dxf.dimasz = 100
     style.dxf.dimexo = 150
     style.dxf.dimexe = 150
     style.dxf.dimgap = 60
