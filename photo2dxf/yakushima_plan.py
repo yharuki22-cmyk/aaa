@@ -66,7 +66,8 @@ ROOMS = {
 def new_doc():
     doc = ezdxf.new("R2010", setup=True)
     doc.units = units.MM
-    doc.styles.add("JP", font="ipag.ttf")
+    # 日本語はMSゴシック(日本語AutoCAD標準)。無い環境向けにbigfontも指定。
+    doc.styles.add("JP", font="msgothic.ttc")
     doc.styles.add("DIM", font="arial.ttf")
     for name, patt in [("CENTER1", [50, 25, -6, 5, -6]), ("DASHED1", [12, 6, -6])]:
         if name in doc.linetypes:
@@ -109,10 +110,20 @@ class Draw:
             dxfattribs={"layer": layer, "style": style, "rotation": rot}
         ).set_placement((x, y), align=TextEntityAlignment.MIDDLE_CENTER)
 
-    def wall_rect(self, x1, y1, x2, y2):
-        """室外周を壁厚Tの二重線で描く。"""
-        self.rect(x1, y1, x2, y2, "02躯体")
-        self.rect(x1 - T, y1 - T, x2 + T, y2 + T, "02躯体")
+    def wall_band(self, x1, y1, x2, y2):
+        """芯線(x1,y1)-(x2,y2)に沿って壁厚Tの帯を1枚描く(閉ポリライン)。"""
+        t = T / 2
+        if abs(x2 - x1) < 1:      # 縦壁
+            self.rect(x1 - t, min(y1, y2) - t, x1 + t, max(y1, y2) + t, "02躯体")
+        else:                      # 横壁
+            self.rect(min(x1, x2) - t, y1 - t, max(x1, x2) + t, y1 + t, "02躯体")
+
+    def room_walls(self, x1, y1, x2, y2):
+        """室の四周を壁厚Tの帯で描く(隣室と芯共有で連続)。"""
+        self.wall_band(x1, y1, x1, y2)   # 左
+        self.wall_band(x2, y1, x2, y2)   # 右
+        self.wall_band(x1, y1, x2, y1)   # 下
+        self.wall_band(x1, y2, x2, y2)   # 上
 
     def door(self, hinge, jamb, side=1):
         hx, hy = hinge
@@ -162,14 +173,11 @@ def main(out_path="output/yakushima_floor_plan.dxf"):
         msp.add_circle((-2_000, y), 300, dxfattribs={"layer": "01通り芯"})
         d.text(-2_000, y, name, h=240, layer="01通り芯", style="DIM")
 
-    # ===== 室(外周壁 + 室名) =====
+    # ===== 室(壁厚150の躯体 + 室名) =====
     for name, (x1, y1, x2, y2) in ROOMS.items():
-        if name != "テラス":
-            d.rect(x1, y1, x2, y2, "02躯体")
+        if name != "テラス":          # テラスは開放(隣室の壁が境界)
+            d.room_walls(x1, y1, x2, y2)
         d.text((x1 + x2) / 2, (y1 + y2) / 2, name, layer="08文字")
-
-    # 建物外周を太線で囲う
-    d.rect(X["X1"], 0, X["X13"], WIDTH, "02躯体")
 
     # ===== テラス(乱形石張り) =====
     tx1, ty1, tx2, ty2 = ROOMS["テラス"]
