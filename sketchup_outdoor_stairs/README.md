@@ -138,6 +138,18 @@ sketchup_outdoor_stairs/
 
 数値はすべて `.mm` を付けて記述してください（例: `165.mm`）。
 
+### 手すり生成のON/OFF
+
+`Parameters::GENERATE_HANDRAIL` を `false` にすると、`Handrail` グループを
+生成せずに他の要素（階段・擁壁・丸窓・照明・周辺環境・カメラ）だけを
+確認できます。手すり以外の調整中や、手すり形状のデバッグを切り分けたい
+場合に利用してください。
+
+```ruby
+# parameters.rb
+GENERATE_HANDRAIL = false
+```
+
 ---
 
 ## 6. 再実行・削除の仕組み
@@ -322,3 +334,48 @@ Rubyスタブ環境上で `OutdoorStairsGenerator.generate_all` を実際に実�
 ただし、面の穴あけ（丸窓フレームの中抜き）やソリッドの妥当性など、
 SketchUp実機のジオメトリエンジン依存の挙動は、実際のSketchUp上での
 最終確認を推奨します。
+
+## 14. 修正履歴
+
+### v1.0.1: SketchUp 2026実機での `ArgumentError: Points are not planar` を修正
+
+SketchUp 2026実機で `OutdoorStairsGenerator.generate_all` を実行すると、
+`lib/handrail_generator.rb` から呼ばれる `GeometryHelpers.loft_profiles`
+（`lib/geometry_helpers.rb`）内で、手すりの断面移行区間（例: 円形→楕円形）の
+側面を4点1枚のFaceとして生成しようとした際に例外が発生していました。
+
+**原因**: ロフトの側面は `[start_ring[i], start_ring[j], end_ring[j], end_ring[i]]`
+の4点で1枚のFaceを作っていましたが、start側とend側で断面形状（円形／楕円形／
+扁平形）が異なる区間では、この4点は一般に同一平面上に乗りません。開発時の
+簡易スタブ環境では平面性チェックを行っていなかったため気づけませんでしたが、
+SketchUp実機のジオメトリエンジンは4点以上のFaceに厳密な平面性を要求するため
+`ArgumentError: Points are not planar` となっていました。
+
+**修正内容**（`lib/geometry_helpers.rb` の `loft_profiles` / 新設
+`add_outward_triangle` / `nearly_same_point?`）:
+
+- ロフト側面の4点パッチを廃止し、必ず三角形2枚
+  （`entities.add_face(p0, p1, p2)` と `entities.add_face(p0, p2, p3)`）に
+  分割して生成するように変更（三角形は3点で必ず平面が定まるため、この種の
+  エラーは原理的に発生しなくなります）。
+- 三角形生成前に、3点のいずれかが重複（ほぼ同一座標）していないかを
+  `nearly_same_point?` で確認し、重複している場合はFaceを生成しないように変更。
+- 外積（三角形面積の2倍に相当）が極端に小さい縮退三角形もFaceを生成しないように変更。
+- `start_ring` / `end_ring` の頂点数が一致していることを明示的に検証
+  （`raise ArgumentError`）するチェックを追加。
+- 断面形状ジェネレータ（`circle_profile` / `ellipse_profile` / `flat_profile`）は
+  いずれも `theta = 2π*i/segments` を増加させながら
+  `[半径*cosθ, 半径*sinθ]` 系で点を生成しており、点の並び方向（巻き順）は
+  もともと統一されていたことを確認済みです。
+- 始端・終端のキャップ面（`start_cap` / `end_cap`）は、断面上の全点が
+  `start_point` または `end_point` を通り `u`（進行方向）を法線とする1つの平面上に
+  乗るように生成しているため平面性が保証されており、多角形Faceのままで
+  問題ありません（三角形分割の対象は側面のみ）。
+- 既存の階段・擁壁・丸窓・照明・カメラ関連の処理（`stair_generator.rb` /
+  `retaining_wall_generator.rb` / `round_window_generator.rb` /
+  `water_channel_generator.rb` / `drainage_light_generator.rb` /
+  `camera_generator.rb` / `context_generator.rb`）は変更していません。
+
+また、`parameters.rb` に `GENERATE_HANDRAIL`（既定値 `true`）を追加し、
+`false` にすると `main.rb` が `Handrail` グループの生成をスキップして
+他の要素だけを確認できるようにしました。

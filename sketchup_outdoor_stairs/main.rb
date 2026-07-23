@@ -59,7 +59,7 @@ module OutdoorStairsGenerator
       RoundWindowGenerator.build(entities, materials)
       WaterChannelGenerator.build(entities, materials)
       _lights_group, light_count = DrainageLightGenerator.build(entities, materials, model)
-      HandrailGenerator.build(entities, materials)
+      HandrailGenerator.build(entities, materials) if Parameters::GENERATE_HANDRAIL
       ContextGenerator.build_left_context(entities, materials)
       ContextGenerator.build_park_context(entities, materials)
       CameraGenerator.build_camera_guide(entities, materials)
@@ -80,6 +80,7 @@ module OutdoorStairsGenerator
     puts "生成したグループ数（ルート直下）: #{group_count}"
     puts "配置した側溝照明の数: #{light_count}"
     puts "配置した丸窓の数: #{window_count}"
+    puts "手すりの生成: #{Parameters::GENERATE_HANDRAIL ? '有効' : '無効（GENERATE_HANDRAIL = false）'}"
     puts "---------------------------------"
 
     UI.messagebox("モデル生成完了")

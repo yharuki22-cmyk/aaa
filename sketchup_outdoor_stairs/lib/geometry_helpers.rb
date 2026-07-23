@@ -163,33 +163,74 @@ module OutdoorStairsGenerator
       end_ring   = end_profile.map   { |pw, pv| end_point.offset(w, pw).offset(v, pv) }
 
       segments = start_ring.length
+      if end_ring.length != segments
+        raise ArgumentError, "start_profile and end_profile must have the same number of points"
+      end
 
       # 始端キャップ（外向き = -u方向）
+      # start_ring / end_ring は、start_point・end_pointを通りuを法線とする平面上の
+      # 点列として生成しているため、そのままの多角形Faceでも平面性は保証される。
       start_cap = entities.add_face(start_ring)
-      start_cap.reverse! if start_cap.normal.dot(u) > 0
+      start_cap.reverse! if start_cap && start_cap.normal.dot(u) > 0
 
       # 終端キャップ（外向き = +u方向）
       end_cap = entities.add_face(end_ring)
-      end_cap.reverse! if end_cap.normal.dot(u) < 0
+      end_cap.reverse! if end_cap && end_cap.normal.dot(u) < 0
 
-      # 側面（四角形パッチ）
+      # 側面: start_ring と end_ring は断面形状が異なる場合（例: 円形→楕円形の
+      # 移行区間）があり、対応する4点 [start_ring[i], start_ring[j], end_ring[j],
+      # end_ring[i]] は一般に同一平面上に乗らない。SketchUp 2026実機では非平面の
+      # 4点Faceを作成すると ArgumentError: Points are not planar が発生するため、
+      # 4点1枚のFaceではなく、必ず三角形2枚（p0-p1-p2 / p0-p2-p3）に分割して生成する。
+      # 三角形は常に平面が定まるため、この問題自体が起こり得ない。
       segments.times do |i|
         j = (i + 1) % segments
-        quad = [start_ring[i], start_ring[j], end_ring[j], end_ring[i]]
-        side = entities.add_face(quad)
-        next unless side # 縮退面（点が重なる等)はnilが返るためスキップ
+        p0 = start_ring[i]
+        p1 = start_ring[j]
+        p2 = end_ring[j]
+        p3 = end_ring[i]
 
-        centroid = Geom::Point3d.new(
-          (quad[0].x + quad[1].x + quad[2].x + quad[3].x) / 4.0,
-          (quad[0].y + quad[1].y + quad[2].y + quad[3].y) / 4.0,
-          (quad[0].z + quad[1].z + quad[2].z + quad[3].z) / 4.0
-        )
-        axis_point = start_point.offset(u, u.dot(centroid - start_point))
-        outward = centroid - axis_point
-        side.reverse! if outward.valid? && side.normal.dot(outward) < 0
+        add_outward_triangle(entities, p0, p1, p2, start_point, u)
+        add_outward_triangle(entities, p0, p2, p3, start_point, u)
       end
 
       true
+    end
+
+    # 三角形1枚を生成し、押し出し軸(axis_start, axis_dir)から見て外向きになるよう
+    # 法線を揃える。以下の場合はFaceを生成せず nil を返す。
+    #   ・3点のいずれかが重複（ほぼ同一座標）している
+    #   ・面積が極端に小さい（縮退している）
+    MIN_TRIANGLE_POINT_GAP = 0.01.mm
+
+    def self.add_outward_triangle(entities, p0, p1, p2, axis_start, axis_dir)
+      return nil if nearly_same_point?(p0, p1)
+      return nil if nearly_same_point?(p1, p2)
+      return nil if nearly_same_point?(p0, p2)
+
+      edge1 = p1 - p0
+      edge2 = p2 - p0
+      # 外積の大きさ = 三角形面積の2倍。極端に小さい場合は縮退面として除外する
+      cross = edge1.cross(edge2)
+      return nil if cross.length < (MIN_TRIANGLE_POINT_GAP * MIN_TRIANGLE_POINT_GAP)
+
+      face = entities.add_face(p0, p1, p2)
+      return nil unless face
+
+      centroid = Geom::Point3d.new(
+        (p0.x + p1.x + p2.x) / 3.0,
+        (p0.y + p1.y + p2.y) / 3.0,
+        (p0.z + p1.z + p2.z) / 3.0
+      )
+      axis_point = axis_start.offset(axis_dir, axis_dir.dot(centroid - axis_start))
+      outward = centroid - axis_point
+      face.reverse! if outward.valid? && face.normal.dot(outward) < 0
+
+      face
+    end
+
+    def self.nearly_same_point?(p1, p2, tolerance = MIN_TRIANGLE_POINT_GAP)
+      (p1 - p2).length < tolerance
     end
   end
 end

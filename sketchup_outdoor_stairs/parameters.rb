@@ -14,8 +14,12 @@ module OutdoorStairsGenerator
     # -------------------------------------------------------------------------
     # 再実行時に「このスクリプトが生成したモデル」だけを判別するための識別子
     ATTRIBUTE_DICTIONARY_NAME = "OutdoorStairsGenerator".freeze
-    SCRIPT_VERSION = "1.0.0".freeze
+    SCRIPT_VERSION = "1.0.1".freeze
     ROOT_GROUP_NAME = "OutdoorStairsGenerator_Root".freeze
+
+    # 手すり生成のON/OFF切替。falseにすると Handrail グループを生成せず、
+    # 他の要素（階段・擁壁・丸窓・照明・周辺環境等）だけを確認できる。
+    GENERATE_HANDRAIL = true
 
     # -------------------------------------------------------------------------
     # 1. 階段全体寸法
